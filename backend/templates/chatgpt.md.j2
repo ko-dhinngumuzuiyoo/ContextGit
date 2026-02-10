@@ -1,0 +1,24 @@
+# Context Pack (for ChatGPT)
+
+## Purpose
+{{ ctx.purpose }}
+
+## Assumptions
+{% for item in ctx.assumptions -%}
+- {{ item }}
+{% endfor %}
+
+## Glossary
+{% for item in ctx.glossary -%}
+- **{{ item.term }}**: {{ item.definition }}
+{% endfor %}
+
+## Decisions
+{% for item in ctx.decisions -%}
+### {{ item.title }}
+{{ item.detail }}
+{% if item.date %}({{ item.date }}){% endif %}
+
+{% endfor %}
+---
+*Exported from ContextGit*

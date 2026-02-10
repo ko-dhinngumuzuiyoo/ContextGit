@@ -1,0 +1,19 @@
+# Shared Context
+
+**Purpose:** {{ ctx.purpose }}
+
+**Assumptions:**
+{% for item in ctx.assumptions -%}
+{{ loop.index }}. {{ item }}
+{% endfor %}
+**Glossary:**
+{% for item in ctx.glossary -%}
+- {{ item.term }} = {{ item.definition }}
+{% endfor %}
+**Key Decisions:**
+{% for item in ctx.decisions -%}
+{{ loop.index }}. [{{ item.title }}] {{ item.detail }}{% if item.date %} ({{ item.date }}){% endif %}
+
+{% endfor %}
+---
+_Exported from ContextGit_

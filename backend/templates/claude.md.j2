@@ -1,0 +1,24 @@
+<context>
+<purpose>
+{{ ctx.purpose }}
+</purpose>
+
+<assumptions>
+{% for item in ctx.assumptions -%}
+- {{ item }}
+{% endfor -%}
+</assumptions>
+
+<glossary>
+{% for item in ctx.glossary -%}
+- {{ item.term }}: {{ item.definition }}
+{% endfor -%}
+</glossary>
+
+<decisions>
+{% for item in ctx.decisions -%}
+- {{ item.title }}: {{ item.detail }}{% if item.date %} ({{ item.date }}){% endif %}
+
+{% endfor -%}
+</decisions>
+</context>
