@@ -8,7 +8,7 @@ export default defineConfig({
     description:
       "Manage shared context for LLMs with Git-like version control",
     version: "0.1.0",
-    permissions: ["sidePanel", "storage", "activeTab"],
+    permissions: ["sidePanel", "storage", "activeTab", "tabs", "alarms"],
     side_panel: {
       default_path: "sidepanel.html",
     },

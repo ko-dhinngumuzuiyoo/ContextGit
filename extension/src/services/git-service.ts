@@ -165,7 +165,165 @@ export class GitService {
     await fs.promises.writeFile(`${DIR}${filename}`, content, "utf8");
   }
 
+  // --- Directory ---
+
+  async ensureDir(repoId: string, dirPath: string): Promise<void> {
+    const fs = getFs(repoId);
+    const parts = dirPath.split("/").filter(Boolean);
+    let current = DIR;
+    for (const part of parts) {
+      current = current === "/" ? `/${part}` : `${current}/${part}`;
+      try {
+        await fs.promises.stat(current);
+      } catch {
+        await fs.promises.mkdir(current);
+      }
+    }
+  }
+
+  // --- Advanced commit: stage all files recursively ---
+
+  async commitAll(repoId: string, message: string): Promise<CommitInfo> {
+    const fs = getFs(repoId);
+    await this.stageAll(fs, DIR, "");
+    const sha = await git.commit({
+      fs,
+      dir: DIR,
+      message,
+      author: AUTHOR,
+    });
+    const [entry] = await git.log({ fs, dir: DIR, depth: 1 });
+    return {
+      hash: sha.slice(0, 7),
+      message: entry.commit.message,
+      author: entry.commit.author.name,
+      date: new Date(entry.commit.author.timestamp * 1000).toISOString(),
+    };
+  }
+
+  private async stageAll(
+    fs: ReturnType<typeof getFs>,
+    dir: string,
+    prefix: string,
+  ): Promise<void> {
+    const entries = (await fs.promises.readdir(
+      prefix ? `${dir}${prefix}` : dir,
+    )) as string[];
+    for (const entry of entries) {
+      if (entry === ".git") continue;
+      const relativePath = prefix ? `${prefix}/${entry}` : entry;
+      const fullPath = `${dir}${relativePath}`;
+      try {
+        const stat = await fs.promises.stat(fullPath);
+        if (stat.isDirectory()) {
+          await this.stageAll(fs, dir, relativePath);
+        } else {
+          await git.add({ fs, dir, filepath: relativePath });
+        }
+      } catch {
+        // Skip if stat fails
+      }
+    }
+  }
+
+  // --- Merge ---
+
+  async merge(
+    repoId: string,
+    sourceBranch: string,
+    targetBranch = "main",
+  ): Promise<void> {
+    const fs = getFs(repoId);
+    await git.checkout({ fs, dir: DIR, ref: targetBranch });
+    await git.merge({
+      fs,
+      dir: DIR,
+      ours: targetBranch,
+      theirs: sourceBranch,
+      author: AUTHOR,
+    });
+  }
+
+  // --- Branch diff ---
+
+  async getBranchDiff(
+    repoId: string,
+    baseBranch: string,
+    compareBranch: string,
+  ): Promise<string> {
+    const fs = getFs(repoId);
+    try {
+      // Get file list from compare branch
+      const compareLog = await git.log({
+        fs,
+        dir: DIR,
+        ref: compareBranch,
+        depth: 1,
+      });
+      if (compareLog.length === 0) return "";
+
+      const { tree: compareTree } = await git.readTree({
+        fs,
+        dir: DIR,
+        oid: compareLog[0].oid,
+      });
+
+      const baseLog = await git.log({
+        fs,
+        dir: DIR,
+        ref: baseBranch,
+        depth: 1,
+      });
+
+      const diffs: string[] = [];
+      for (const entry of compareTree) {
+        if (entry.type !== "blob") continue;
+        const newContent = await this.readBlobContent(fs, entry.oid);
+        let oldContent = "";
+        if (baseLog.length > 0) {
+          oldContent = await this.readFileAtRef(fs, baseBranch, entry.path);
+        }
+        if (newContent !== oldContent) {
+          diffs.push(
+            createTwoFilesPatch(
+              `a/${entry.path}`,
+              `b/${entry.path}`,
+              oldContent,
+              newContent,
+            ),
+          );
+        }
+      }
+      return diffs.join("\n");
+    } catch {
+      return "";
+    }
+  }
+
+  // --- Read file at specific branch (without checkout) ---
+
+  async readFileAtBranch(
+    repoId: string,
+    branch: string,
+    filename: string,
+  ): Promise<string | null> {
+    const fs = getFs(repoId);
+    try {
+      return this.readFileAtRef(fs, branch, filename) || null;
+    } catch {
+      return null;
+    }
+  }
+
   // --- Helpers ---
+
+  private async readBlobContent(
+    fs: ReturnType<typeof getFs>,
+    oid: string,
+  ): Promise<string> {
+    const { blob } = await git.readBlob({ fs, dir: DIR, oid });
+    return new TextDecoder().decode(blob);
+  }
 
   private async readFileAtRef(
     fs: ReturnType<typeof getFs>,
